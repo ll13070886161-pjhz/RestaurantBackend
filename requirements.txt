@@ -1,0 +1,16 @@
+volcengine-python-sdk
+moviepy
+requests
+python-dotenv
+streamlit
+Pillow
+numpy
+fastapi
+uvicorn
+openpyxl
+python-multipart
+pydantic
+SQLAlchemy
+pytest
+PyMySQL
+cryptography

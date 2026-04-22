@@ -1,0 +1,196 @@
+{
+  "items": [
+    {
+      "dish_name": "宫保鸡丁",
+      "ingredient_name": "鸡腿肉",
+      "ingredient_amount": 200,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "宫保鸡丁",
+      "ingredient_name": "花生米",
+      "ingredient_amount": 50,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "宫保鸡丁",
+      "ingredient_name": "大葱",
+      "ingredient_amount": 30,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "宫保鸡丁",
+      "ingredient_name": "干红辣椒",
+      "ingredient_amount": 5,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "宫保鸡丁",
+      "ingredient_name": "花椒",
+      "ingredient_amount": 2,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "宫保鸡丁",
+      "ingredient_name": "生姜",
+      "ingredient_amount": 5,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "宫保鸡丁",
+      "ingredient_name": "蒜",
+      "ingredient_amount": 5,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "宫保鸡丁",
+      "ingredient_name": "食用油",
+      "ingredient_amount": 30,
+      "ingredient_unit": "毫升"
+    },
+    {
+      "dish_name": "宫保鸡丁",
+      "ingredient_name": "生抽酱油",
+      "ingredient_amount": 10,
+      "ingredient_unit": "毫升"
+    },
+    {
+      "dish_name": "宫保鸡丁",
+      "ingredient_name": "老抽酱油",
+      "ingredient_amount": 3,
+      "ingredient_unit": "毫升"
+    },
+    {
+      "dish_name": "宫保鸡丁",
+      "ingredient_name": "料酒",
+      "ingredient_amount": 10,
+      "ingredient_unit": "毫升"
+    },
+    {
+      "dish_name": "宫保鸡丁",
+      "ingredient_name": "白糖",
+      "ingredient_amount": 10,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "宫保鸡丁",
+      "ingredient_name": "香醋",
+      "ingredient_amount": 15,
+      "ingredient_unit": "毫升"
+    },
+    {
+      "dish_name": "宫保鸡丁",
+      "ingredient_name": "玉米淀粉",
+      "ingredient_amount": 10,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "酸辣土豆丝",
+      "ingredient_name": "土豆",
+      "ingredient_amount": 300,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "酸辣土豆丝",
+      "ingredient_name": "青椒",
+      "ingredient_amount": 20,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "酸辣土豆丝",
+      "ingredient_name": "红椒",
+      "ingredient_amount": 20,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "酸辣土豆丝",
+      "ingredient_name": "干辣椒",
+      "ingredient_amount": 3,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "酸辣土豆丝",
+      "ingredient_name": "花椒",
+      "ingredient_amount": 1,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "酸辣土豆丝",
+      "ingredient_name": "大蒜",
+      "ingredient_amount": 5,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "酸辣土豆丝",
+      "ingredient_name": "食用油",
+      "ingredient_amount": 25,
+      "ingredient_unit": "毫升"
+    },
+    {
+      "dish_name": "酸辣土豆丝",
+      "ingredient_name": "白醋",
+      "ingredient_amount": 20,
+      "ingredient_unit": "毫升"
+    },
+    {
+      "dish_name": "酸辣土豆丝",
+      "ingredient_name": "食盐",
+      "ingredient_amount": 5,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "酸辣土豆丝",
+      "ingredient_name": "白糖",
+      "ingredient_amount": 2,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "番茄炒蛋",
+      "ingredient_name": "鸡蛋",
+      "ingredient_amount": 3,
+      "ingredient_unit": "个"
+    },
+    {
+      "dish_name": "番茄炒蛋",
+      "ingredient_name": "番茄",
+      "ingredient_amount": 2,
+      "ingredient_unit": "个"
+    },
+    {
+      "dish_name": "番茄炒蛋",
+      "ingredient_name": "小葱",
+      "ingredient_amount": 5,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "番茄炒蛋",
+      "ingredient_name": "大蒜",
+      "ingredient_amount": 3,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "番茄炒蛋",
+      "ingredient_name": "食用油",
+      "ingredient_amount": 25,
+      "ingredient_unit": "毫升"
+    },
+    {
+      "dish_name": "番茄炒蛋",
+      "ingredient_name": "食盐",
+      "ingredient_amount": 4,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "番茄炒蛋",
+      "ingredient_name": "白糖",
+      "ingredient_amount": 5,
+      "ingredient_unit": "克"
+    },
+    {
+      "dish_name": "番茄炒蛋",
+      "ingredient_name": "水淀粉",
+      "ingredient_amount": 10,
+      "ingredient_unit": "克"
+    }
+  ]
+}

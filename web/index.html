@@ -1,0 +1,1197 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>图片解析生成Excel报表</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 32px; line-height: 1.5; }
+    .container { max-width: 960px; margin: 0 auto; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    button { padding: 8px 14px; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 13px; }
+    .muted { color: #666; }
+    .error { color: #b00020; }
+    .highlight { background: #fff3a3; padding: 0 2px; border-radius: 2px; }
+    th.sortable { cursor: pointer; user-select: none; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+    .badge-instant { background: #e8f7ee; color: #167a3e; }
+    .badge-non-instant { background: #eaf2ff; color: #1f5fbf; }
+    .badge-unknown { background: #f3f3f3; color: #666; }
+    .toolbar-inline { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .note-box { margin-top: 10px; padding: 10px 12px; border: 1px dashed #bbb; border-radius: 6px; background: #fafafa; font-size: 13px; }
+    .danger { color: #b00020; font-weight: 700; }
+    .alert-modal { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 9999; }
+    .alert-modal-card { width: min(800px, 92vw); max-height: 80vh; overflow: auto; background: #fff; border-radius: 10px; padding: 18px; box-shadow: 0 12px 30px rgba(0,0,0,.28); border: 3px solid #ff9800; }
+    .alert-modal-card h3 { margin: 0 0 8px; color: #b00020; }
+    .alert-modal-card ul { margin: 10px 0; padding-left: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>采购 / 营业 / 日报（框架）</h2>
+
+    <div class="card">
+      <strong>采购入库</strong>
+      <div style="margin-top: 10px;">
+        <label class="muted">日期：</label>
+        <input id="purchaseDate" type="date" />
+      </div>
+      <div style="margin-top: 10px;">
+        <input id="purchaseFiles" type="file" accept="image/*" multiple />
+        <button id="purchaseParseBtn">开始识别</button>
+        <button id="purchaseSaveBtn" style="margin-left: 8px; display: none;">保存到数据库</button>
+        <a id="purchaseDownload" href="/api/purchase/download-latest" style="margin-left: 8px; display: none;">下载Excel</a>
+      </div>
+      <div class="toolbar-inline">
+        <input id="purchaseManualName" type="text" placeholder="手动录入用料名称" style="min-width: 240px;" />
+        <input id="purchaseManualQty" type="number" min="0" step="0.01" value="1" style="width: 100px;" />
+        <input id="purchaseManualUnit" type="text" placeholder="单位(如克/毫升/个)" style="width: 140px;" />
+        <button id="purchaseManualAddBtn">添加用料</button>
+      </div>
+      <p id="purchaseStatus" class="muted"></p>
+      <p id="purchaseErrors" class="error"></p>
+      <p id="purchaseSaveResult" class="muted"></p>
+      <div class="muted" style="margin-top: 8px;">
+        <label style="user-select: none;">
+          <input id="purchaseSelectAll" type="checkbox" />
+          全选
+        </label>
+      </div>
+      <div style="overflow-x: auto;">
+        <table id="purchaseTable"></table>
+      </div>
+    </div>
+
+    <div class="card">
+      <strong>营业入库</strong>
+      <div style="margin-top: 10px;">
+        <label class="muted">日期：</label>
+        <input id="salesDate" type="date" />
+      </div>
+      <div style="margin-top: 10px;">
+        <input id="salesFiles" type="file" accept="image/*" multiple />
+        <button id="salesParseBtn">开始识别</button>
+        <button id="salesSaveBtn" style="margin-left: 8px; display: none;">确认录入库存</button>
+        <a id="salesDownload" href="/api/sales/download-latest" style="margin-left: 8px; display: none;">下载Excel</a>
+      </div>
+      <div class="toolbar-inline">
+        <label><input id="salesAutoSaveToggle" type="checkbox" /> 识别后自动入库（默认关闭）</label>
+      </div>
+      <div class="toolbar-inline">
+        <input id="salesManualDishName" list="salesDishSuggestions" type="text" placeholder="手动补录菜名（支持模糊匹配）" style="min-width: 260px;" />
+        <datalist id="salesDishSuggestions"></datalist>
+        <input id="salesManualQty" type="number" min="0" step="1" value="1" style="width: 90px;" />
+        <input id="salesManualUnitPrice" type="number" min="0" step="0.01" placeholder="单价(可选)" style="width: 120px;" />
+        <button id="salesManualAddBtn">添加菜品</button>
+      </div>
+      <p id="salesStatus" class="muted"></p>
+      <p id="salesErrors" class="error"></p>
+      <p id="salesSaveResult" class="muted"></p>
+      <div class="muted" style="margin-top: 8px;">
+        <label style="user-select: none;">
+          <input id="salesSelectAll" type="checkbox" />
+          全选
+        </label>
+      </div>
+      <div style="overflow-x: auto;">
+        <table id="salesTable"></table>
+      </div>
+    </div>
+
+    <div class="card">
+      <strong>日报（骨架）</strong>
+      <div style="margin-top: 10px;">
+        <label class="muted">日期：</label>
+        <input id="reportDate" type="date" />
+        <button id="reportLoadBtn" style="margin-left: 8px;">加载</button>
+        <a id="reportDownload" href="#" style="margin-left: 8px; display: none;">下载日报Excel</a>
+      </div>
+      <p id="reportStatus" class="muted"></p>
+      <div id="reportSummary"></div>
+      <div id="reportMethodNote" class="note-box" style="display:none;"></div>
+      <div id="reportTables"></div>
+    </div>
+
+    <div class="card">
+      <strong>库存查看</strong>
+      <div style="margin-top: 10px;">
+        <label class="muted">商品名搜索：</label>
+        <input id="inventoryKeyword" type="text" placeholder="输入关键词后回车或点查询" style="min-width: 220px;" />
+        <button id="inventoryLoadBtn">查看库存</button>
+        <button id="inventoryReclassifyBtn" style="margin-left: 8px;">重分类历史数据</button>
+        <button id="inventoryExportBtn" style="margin-left: 8px;">导出当前CSV</button>
+        <button id="inventoryNotifyBtn" style="margin-left: 8px;">发送飞书预警</button>
+      </div>
+      <div class="toolbar-inline">
+        <button id="typeFilterAllBtn">全部</button>
+        <button id="typeFilterInstantBtn">仅即时消耗</button>
+        <button id="typeFilterNonInstantBtn">仅非即时消耗</button>
+        <button id="typeFilterUnknownBtn">仅待分类</button>
+      </div>
+      <p id="inventoryStatus" class="muted"></p>
+      <div style="overflow-x: auto;">
+        <table id="inventoryTable"></table>
+      </div>
+    </div>
+  </div>
+  <div id="inventoryAlertModal" class="alert-modal">
+    <div class="alert-modal-card">
+      <h3>库存预警</h3>
+      <p class="danger">检测到部分物料库存低于预设阈值，请及时补货。</p>
+      <ul id="inventoryAlertList"></ul>
+      <div style="text-align: right;">
+        <button id="inventoryAlertCloseBtn">我知道了</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function todayISO() {
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    const COLUMN_LABELS = {
+      product_name: "商品名称",
+      unit_price: "商品单价",
+      quantity: "购买份数",
+      unit_amount: "单份数量",
+      quantity_unit: "量词",
+      total_quantity: "总数量",
+      amount: "商品金额",
+      order_created_at: "订单生成时间",
+      remarks: "备注",
+      consumption_type: "消耗类型",
+    };
+    const COLUMN_ORDER = [
+      "product_name",
+      "unit_price",
+      "quantity",
+      "unit_amount",
+      "quantity_unit",
+      "total_quantity",
+      "amount",
+      "consumption_type",
+      "order_created_at",
+      "remarks",
+    ];
+
+    function consumptionTypeLabel(value) {
+      if (value === "instant") return "即时消耗";
+      if (value === "non_instant") return "非即时消耗";
+      if (value === "unknown") return "待分类";
+      return value ?? "";
+    }
+
+    function consumptionTypeBadge(typeValue, typeLabel) {
+      const label = typeLabel || consumptionTypeLabel(typeValue) || "待分类";
+      if (typeValue === "instant") return `<span class="badge badge-instant">${escapeHtml(label)}</span>`;
+      if (typeValue === "non_instant") return `<span class="badge badge-non-instant">${escapeHtml(label)}</span>`;
+      return `<span class="badge badge-unknown">${escapeHtml(label)}</span>`;
+    }
+
+    function createSelectableTable({ tableEl, selectAllEl, formatCell, selectAllByDefault = false }) {
+      const state = {
+        rows: [],
+        columns: null,
+        selected: new Set(),
+      };
+
+      function refreshSelectAll() {
+        if (!state.rows.length) {
+          selectAllEl.checked = false;
+          selectAllEl.indeterminate = false;
+          return;
+        }
+        const selectedCount = state.selected.size;
+        if (selectedCount === 0) {
+          selectAllEl.checked = false;
+          selectAllEl.indeterminate = false;
+        } else if (selectedCount === state.rows.length) {
+          selectAllEl.checked = true;
+          selectAllEl.indeterminate = false;
+        } else {
+          selectAllEl.checked = false;
+          selectAllEl.indeterminate = true;
+        }
+      }
+
+      function render() {
+        tableEl.innerHTML = "";
+        if (!state.rows.length) {
+          tableEl.innerHTML = "<tr><td>暂无数据</td></tr>";
+          refreshSelectAll();
+          return;
+        }
+        const headers =
+          state.columns && Array.isArray(state.columns) && state.columns.length
+            ? state.columns.map((c) => c.key)
+            : COLUMN_ORDER.filter((key) => state.rows.some((row) => Object.hasOwn(row, key)));
+        const headerLabels = {};
+        if (state.columns && Array.isArray(state.columns)) {
+          state.columns.forEach((c) => (headerLabels[c.key] = c.label));
+        }
+        const thead =
+          "<tr>" +
+          `<th style="width: 60px;">选择</th>` +
+          headers.map((h) => `<th>${headerLabels[h] || COLUMN_LABELS[h] || h}</th>`).join("") +
+          "</tr>";
+        const tbody = state.rows
+          .map((row, idx) => {
+            const checked = state.selected.has(idx) ? "checked" : "";
+            const cells = headers
+              .map((h) => {
+                const v = formatCell ? formatCell({ key: h, value: row[h], row }) : row[h];
+                return `<td>${v ?? ""}</td>`;
+              })
+              .join("");
+            return `<tr>
+              <td style="text-align:center;">
+                <input type="checkbox" data-row-idx="${idx}" ${checked} />
+              </td>
+              ${cells}
+            </tr>`;
+          })
+          .join("");
+        tableEl.innerHTML = thead + tbody;
+
+        tableEl.querySelectorAll("input[type=checkbox][data-row-idx]").forEach((el) => {
+          el.addEventListener("change", (e) => {
+            const i = Number(e.target.getAttribute("data-row-idx"));
+            if (e.target.checked) state.selected.add(i);
+            else state.selected.delete(i);
+            refreshSelectAll();
+          });
+        });
+        refreshSelectAll();
+      }
+
+      selectAllEl.addEventListener("change", () => {
+        state.selected = new Set();
+        if (selectAllEl.checked) {
+          state.rows.forEach((_, idx) => state.selected.add(idx));
+        }
+        render();
+      });
+
+      return {
+        setData({ rows, columns }) {
+          state.rows = rows || [];
+          state.columns = columns || null;
+          state.selected = new Set();
+          if (selectAllByDefault) {
+            state.rows.forEach((_, idx) => state.selected.add(idx));
+          }
+          render();
+        },
+        appendRows(rows) {
+          if (!Array.isArray(rows) || !rows.length) return;
+          const start = state.rows.length;
+          state.rows = state.rows.concat(rows);
+          if (selectAllByDefault) {
+            rows.forEach((_, idx) => state.selected.add(start + idx));
+          }
+          render();
+        },
+        getSelectedRows() {
+          return Array.from(state.selected)
+            .map((i) => state.rows[i])
+            .filter(Boolean);
+        },
+        clear() {
+          state.rows = [];
+          state.columns = null;
+          state.selected = new Set();
+          render();
+        },
+      };
+    }
+
+    function bindFlow({
+      dateEl,
+      filesEl,
+      parseBtn,
+      saveBtn,
+      downloadEl,
+      statusEl,
+      errorsEl,
+      saveResultEl,
+      table,
+      parseUrl,
+      saveUrl,
+    }) {
+      let lastBizDate = "";
+      let lastImagePaths = [];
+
+      function reset() {
+        errorsEl.textContent = "";
+        saveResultEl.textContent = "";
+        statusEl.textContent = "";
+        saveBtn.style.display = "none";
+        if (downloadEl) downloadEl.style.display = "none";
+        lastBizDate = "";
+        lastImagePaths = [];
+        table.clear();
+      }
+
+      parseBtn.addEventListener("click", async () => {
+        reset();
+        const files = filesEl.files;
+        if (!files || !files.length) {
+          statusEl.textContent = "请先选择图片。";
+          return;
+        }
+        const formData = new FormData();
+        Array.from(files).forEach((file) => formData.append("files", file));
+        formData.append("biz_date", dateEl.value || "");
+
+        statusEl.textContent = "识别中，请稍候...";
+        try {
+          const resp = await fetch(parseUrl, { method: "POST", body: formData });
+          const data = await resp.json();
+          if (!resp.ok) {
+            const detail = data.detail ? JSON.stringify(data.detail) : "识别失败";
+            throw new Error(detail);
+          }
+          lastBizDate = data.biz_date || (dateEl.value || "");
+          lastImagePaths = data.source_image_paths || [];
+          const rows = data.preview || [];
+          const columns = (data.preview_columns || null)
+            ? data.preview_columns.filter((c) => c.key !== "quantity_unit")
+            : null;
+          table.setData({ rows, columns });
+          statusEl.textContent = `识别完成：${rows.length} 条。`;
+          if (data.auto_saved) {
+            saveBtn.style.display = "none";
+            const s = data.save_summary || {};
+            const c = data.ticket_consumption || [];
+            saveResultEl.textContent = `自动入库完成：新增 ${s.inserted || 0}，跳过 ${s.skipped || 0}，累加 ${s.accumulated || 0}；本单扣减明细 ${c.length} 条。`;
+          }
+          if (data.errors && data.errors.length) {
+            errorsEl.textContent = "失败明细：" + JSON.stringify(data.errors);
+          }
+          if (!data.auto_saved) saveBtn.style.display = rows.length ? "inline" : "none";
+          if (downloadEl) downloadEl.style.display = rows.length ? "inline" : "none";
+        } catch (err) {
+          statusEl.textContent = "处理失败。";
+          errorsEl.textContent = String(err);
+        }
+      });
+
+      saveBtn.addEventListener("click", async () => {
+        errorsEl.textContent = "";
+        saveResultEl.textContent = "";
+        const items = table.getSelectedRows();
+        if (!items.length) {
+          saveResultEl.textContent = "请先勾选要保存的条目。";
+          return;
+        }
+        saveResultEl.textContent = "保存中...";
+        try {
+          const resp = await fetch(saveUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              biz_date: lastBizDate || (dateEl.value || ""),
+              source_image_paths: lastImagePaths,
+              items,
+            }),
+          });
+          const data = await resp.json();
+          if (!resp.ok) {
+            const detail = data.detail ? JSON.stringify(data.detail) : "保存失败";
+            throw new Error(detail);
+          }
+          saveResultEl.textContent = `已处理：新增 ${data.inserted}，跳过 ${data.skipped}，累加 ${data.accumulated}。`;
+        } catch (err) {
+          saveResultEl.textContent = "保存失败。";
+          errorsEl.textContent = String(err);
+        }
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function normalizeNumberDisplay(value) {
+      const raw = String(value ?? "");
+      if (!raw) return "";
+      if (!/^-?\d+(\.\d+)?$/.test(raw)) return raw;
+      if (!raw.includes(".")) return raw;
+      return raw.replace(/(\.\d*?[1-9])0+$/, "$1").replace(/\.0+$/, "");
+    }
+
+    function renderHighlightedText(text, keyword) {
+      const source = String(text ?? "");
+      if (!keyword) return escapeHtml(source);
+      const lower = source.toLowerCase();
+      const key = keyword.toLowerCase();
+      let idx = 0;
+      let out = "";
+      while (idx < source.length) {
+        const found = lower.indexOf(key, idx);
+        if (found === -1) {
+          out += escapeHtml(source.slice(idx));
+          break;
+        }
+        out += escapeHtml(source.slice(idx, found));
+        out += `<span class="highlight">${escapeHtml(source.slice(found, found + key.length))}</span>`;
+        idx = found + key.length;
+      }
+      return out;
+    }
+
+    function renderInventoryTable(tableEl, rows, keyword, sortState) {
+      tableEl.innerHTML = "";
+      if (!rows.length) {
+        tableEl.innerHTML = "<tr><td>暂无库存数据</td></tr>";
+        return;
+      }
+      const headers = [
+        ["product_name", "商品名称"],
+        ["consumption_type_label", "消耗类型"],
+        ["_actions", "操作"],
+        ["_alert", "库存预警设置"],
+        ["quantity", "购买份数"],
+        ["unit_price", "单价"],
+        ["unit_amount", "单份数量"],
+        ["total_quantity", "总数量"],
+        ["amount", "金额"],
+        ["last_saved_date", "最后保存日期"],
+        ["updated_at", "更新时间"],
+      ];
+      const thead =
+        "<tr>" +
+        headers
+          .map(([key, label]) => {
+            const arrow =
+              sortState && sortState.key === key ? (sortState.direction === "asc" ? " ▲" : " ▼") : "";
+            return `<th class="sortable" data-sort-key="${key}">${label}${arrow}</th>`;
+          })
+          .join("") +
+        "</tr>";
+      const tbody = rows
+        .map((row) => {
+          return (
+            "<tr>" +
+            headers
+              .map(([key]) => {
+                if (key === "product_name") return `<td>${renderHighlightedText(row[key], keyword)}</td>`;
+                if (key === "consumption_type_label") return `<td>${consumptionTypeBadge(row.consumption_type, row[key])}</td>`;
+                if (key === "_actions") {
+                  const id = row.id;
+                  const cur = row.consumption_type || "unknown";
+                  const options = [
+                    ["unknown", "未分类"],
+                    ["instant", "即时消耗"],
+                    ["non_instant", "非即时消耗"],
+                  ]
+                    .map(([v, label]) => `<option value="${v}"${v === cur ? " selected" : ""}>${label}</option>`)
+                    .join("");
+                  return (
+                    `<td>` +
+                    `<select class="inv-type-select" data-id="${id}" style="max-width: 110px;">${options}</select>` +
+                    `<button class="inv-type-save" data-id="${id}" style="margin-left: 6px;">保存</button>` +
+                    `</td>`
+                  );
+                }
+                if (key === "_alert") {
+                  const id = row.id;
+                  const enabled = row.low_stock_alert_enabled ? "checked" : "";
+                  const threshold = row.low_stock_threshold == null ? "" : row.low_stock_threshold;
+                  return (
+                    `<td>` +
+                    `<label style="white-space:nowrap;"><input type="checkbox" class="inv-alert-enabled" data-id="${id}" ${enabled} />启用</label>` +
+                    `<input class="inv-alert-threshold" data-id="${id}" type="number" min="0" step="0.01" value="${escapeHtml(threshold)}" placeholder="阈值" style="width:90px;margin-left:6px;" />` +
+                    `<button class="inv-alert-save" data-id="${id}" style="margin-left:6px;">保存</button>` +
+                    `</td>`
+                  );
+                }
+                if (key === "remarks") return "<td></td>";
+                if (key === "unit_amount" || key === "total_quantity") {
+                  const v = normalizeNumberDisplay(row[key]);
+                  const unit = row.quantity_unit || "";
+                  return `<td>${escapeHtml(v ? `${v}${unit}` : "")}</td>`;
+                }
+                if (key === "unit_price" || key === "amount") {
+                  const v = normalizeNumberDisplay(row[key]);
+                  return `<td>${escapeHtml(v ? `${v}元` : "")}</td>`;
+                }
+                if (key === "quantity") {
+                  return `<td>${escapeHtml(normalizeNumberDisplay(row[key]))}</td>`;
+                }
+                return `<td>${escapeHtml(row[key] ?? "")}</td>`;
+              })
+              .join("") +
+            "</tr>"
+          );
+        })
+        .join("");
+      tableEl.innerHTML = thead + tbody;
+    }
+
+    async function updateInventoryConsumptionType(itemId, consumptionType) {
+      const resp = await fetch(`/api/purchase/items/${encodeURIComponent(itemId)}/consumption-type`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ consumption_type: consumptionType }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        const detail = data.detail ? JSON.stringify(data.detail) : "保存失败";
+        throw new Error(detail);
+      }
+      return data.item;
+    }
+
+    async function updateInventoryAlertConfig(itemId, enabled, threshold) {
+      const resp = await fetch(`/api/purchase/items/${encodeURIComponent(itemId)}/alert-config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled, threshold }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        const detail = data.detail ? JSON.stringify(data.detail) : "保存失败";
+        throw new Error(detail);
+      }
+      return data.item;
+    }
+
+    async function fetchLowStockAlerts(triggerNotify = false) {
+      const resp = await fetch(`/api/inventory/alerts?trigger_notify=${triggerNotify ? "true" : "false"}`);
+      const data = await resp.json();
+      if (!resp.ok) {
+        const detail = data.detail ? JSON.stringify(data.detail) : "加载预警失败";
+        throw new Error(detail);
+      }
+      return data;
+    }
+
+    function showInventoryAlertModal(items) {
+      const modal = document.getElementById("inventoryAlertModal");
+      const listEl = document.getElementById("inventoryAlertList");
+      if (!modal || !listEl) return;
+      listEl.innerHTML = (items || [])
+        .slice(0, 30)
+        .map((item) => {
+          const unit = item.quantity_unit || "";
+          return `<li><strong>${escapeHtml(item.item_name || "")}</strong>：库存 ${escapeHtml(normalizeNumberDisplay(item.current_stock))}${escapeHtml(unit)}，阈值 ${escapeHtml(normalizeNumberDisplay(item.threshold))}${escapeHtml(unit)}</li>`;
+        })
+        .join("");
+      modal.style.display = "flex";
+    }
+
+    function bindInventoryActions() {
+      inventoryTableEl.querySelectorAll("button.inv-type-save").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-id");
+          const select = inventoryTableEl.querySelector(`select.inv-type-select[data-id="${id}"]`);
+          const next = select ? select.value : "unknown";
+          btn.disabled = true;
+          const oldText = btn.textContent;
+          btn.textContent = "保存中...";
+          try {
+            const updated = await updateInventoryConsumptionType(id, next);
+            const idx = inventorySourceRows.findIndex((r) => String(r.id) === String(updated.id));
+            if (idx >= 0) {
+              const merged = {
+                ...inventorySourceRows[idx],
+                consumption_type: updated.consumption_type || "unknown",
+                consumption_type_label: updated.consumption_type_label || "待分类",
+                updated_at: updated.updated_at,
+              };
+              inventorySourceRows[idx] = merged;
+            }
+            applyInventoryView();
+            inventoryStatusEl.textContent = "已保存分类。";
+          } catch (err) {
+            inventoryStatusEl.textContent = `保存失败：${String(err)}`;
+          } finally {
+            btn.disabled = false;
+            btn.textContent = oldText || "保存";
+          }
+        });
+      });
+      inventoryTableEl.querySelectorAll("button.inv-alert-save").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-id");
+          const enabledEl = inventoryTableEl.querySelector(`input.inv-alert-enabled[data-id="${id}"]`);
+          const thresholdEl = inventoryTableEl.querySelector(`input.inv-alert-threshold[data-id="${id}"]`);
+          const enabled = Boolean(enabledEl && enabledEl.checked);
+          const thresholdRaw = thresholdEl ? thresholdEl.value : "";
+          const threshold = thresholdRaw === "" ? null : Number(thresholdRaw);
+          if (threshold != null && (!Number.isFinite(threshold) || threshold < 0)) {
+            inventoryStatusEl.textContent = "阈值必须是大于等于 0 的数字。";
+            return;
+          }
+          btn.disabled = true;
+          const oldText = btn.textContent;
+          btn.textContent = "保存中...";
+          try {
+            const updated = await updateInventoryAlertConfig(id, enabled, threshold);
+            const idx = inventorySourceRows.findIndex((r) => String(r.id) === String(updated.id));
+            if (idx >= 0) {
+              inventorySourceRows[idx] = {
+                ...inventorySourceRows[idx],
+                low_stock_alert_enabled: Boolean(updated.low_stock_alert_enabled),
+                low_stock_threshold: updated.low_stock_threshold,
+                updated_at: updated.updated_at,
+              };
+            }
+            applyInventoryView();
+            inventoryStatusEl.textContent = "预警设置已保存。";
+          } catch (err) {
+            inventoryStatusEl.textContent = `预警设置保存失败：${String(err)}`;
+          } finally {
+            btn.disabled = false;
+            btn.textContent = oldText || "保存";
+          }
+        });
+      });
+    }
+
+    function toCsv(rows) {
+      const headers = [
+        ["product_name", "商品名称"],
+        ["consumption_type_label", "消耗类型"],
+        ["quantity", "购买份数"],
+        ["unit_price", "单价"],
+        ["unit_amount", "单份数量"],
+        ["total_quantity", "总数量"],
+        ["amount", "金额"],
+        ["last_saved_date", "最后保存日期"],
+        ["updated_at", "更新时间"],
+      ];
+      const escapeCell = (value) => {
+        const text = value == null ? "" : String(value);
+        if (/[",\n]/.test(text)) {
+          return `"${text.replace(/"/g, '""')}"`;
+        }
+        return text;
+      };
+      const lines = [
+        headers.map(([, label]) => escapeCell(label)).join(","),
+        ...rows.map((row) => headers.map(([key]) => escapeCell(row[key])).join(",")),
+      ];
+      return lines.join("\n");
+    }
+
+    function downloadTextFile(filename, content, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById("purchaseDate").value = todayISO();
+    document.getElementById("salesDate").value = todayISO();
+    document.getElementById("reportDate").value = todayISO();
+
+    const purchaseTable = createSelectableTable({
+      tableEl: document.getElementById("purchaseTable"),
+      selectAllEl: document.getElementById("purchaseSelectAll"),
+      formatCell: ({ key, value, row }) => {
+        if (key === "remarks") return "";
+        if (key === "consumption_type") return consumptionTypeLabel(value);
+        if (key === "unit_amount" || key === "total_quantity") {
+          const v = normalizeNumberDisplay(value);
+          const unit = row.quantity_unit || "";
+          return v ? `${v}${unit}` : "";
+        }
+        if (key === "unit_price" || key === "amount") {
+          const v = normalizeNumberDisplay(value);
+          return v ? `${v}元` : "";
+        }
+        if (key === "quantity") return normalizeNumberDisplay(value);
+        return value ?? "";
+      },
+    });
+    const salesTable = createSelectableTable({
+      tableEl: document.getElementById("salesTable"),
+      selectAllEl: document.getElementById("salesSelectAll"),
+      selectAllByDefault: true,
+      formatCell: ({ key, value }) => {
+        if (key === "remarks") return "";
+        if (key === "unit_price" || key === "amount") {
+          const v = normalizeNumberDisplay(value);
+          return v ? `${v}元` : "";
+        }
+        if (key === "quantity") return normalizeNumberDisplay(value);
+        return value ?? "";
+      },
+    });
+
+    bindFlow({
+      dateEl: document.getElementById("purchaseDate"),
+      filesEl: document.getElementById("purchaseFiles"),
+      parseBtn: document.getElementById("purchaseParseBtn"),
+      saveBtn: document.getElementById("purchaseSaveBtn"),
+      downloadEl: document.getElementById("purchaseDownload"),
+      statusEl: document.getElementById("purchaseStatus"),
+      errorsEl: document.getElementById("purchaseErrors"),
+      saveResultEl: document.getElementById("purchaseSaveResult"),
+      table: purchaseTable,
+      parseUrl: "/api/purchase/parse-images",
+      saveUrl: "/api/purchase/save",
+    });
+    document.getElementById("purchaseManualAddBtn").addEventListener("click", () => {
+      const name = (document.getElementById("purchaseManualName").value || "").trim();
+      const qty = Number(document.getElementById("purchaseManualQty").value || "1");
+      const unit = (document.getElementById("purchaseManualUnit").value || "").trim();
+      if (!name) {
+        document.getElementById("purchaseSaveResult").textContent = "请先输入用料名称。";
+        return;
+      }
+      if (!Number.isFinite(qty) || qty <= 0) {
+        document.getElementById("purchaseSaveResult").textContent = "数量必须大于0。";
+        return;
+      }
+      purchaseTable.appendRows([
+        {
+          product_name: name,
+          quantity: qty,
+          unit_amount: 1,
+          quantity_unit: unit,
+          total_quantity: qty,
+          unit_price: null,
+          amount: null,
+          order_created_at: new Date().toISOString(),
+          remarks: "手动录入",
+          consumption_type: "unknown",
+        },
+      ]);
+      document.getElementById("purchaseSaveBtn").style.display = "inline";
+      document.getElementById("purchaseSaveResult").textContent = `已添加手动用料：${name}`;
+      document.getElementById("purchaseManualName").value = "";
+      document.getElementById("purchaseManualQty").value = "1";
+      document.getElementById("purchaseManualUnit").value = "";
+    });
+
+    const salesDateEl = document.getElementById("salesDate");
+    const salesFilesEl = document.getElementById("salesFiles");
+    const salesParseBtn = document.getElementById("salesParseBtn");
+    const salesSaveBtn = document.getElementById("salesSaveBtn");
+    const salesDownloadEl = document.getElementById("salesDownload");
+    const salesStatusEl = document.getElementById("salesStatus");
+    const salesErrorsEl = document.getElementById("salesErrors");
+    const salesSaveResultEl = document.getElementById("salesSaveResult");
+    const salesAutoSaveToggleEl = document.getElementById("salesAutoSaveToggle");
+    const salesManualDishNameEl = document.getElementById("salesManualDishName");
+    const salesManualQtyEl = document.getElementById("salesManualQty");
+    const salesManualUnitPriceEl = document.getElementById("salesManualUnitPrice");
+    const salesManualAddBtn = document.getElementById("salesManualAddBtn");
+    const salesDishSuggestionsEl = document.getElementById("salesDishSuggestions");
+    let salesLastBizDate = "";
+    let salesLastImagePaths = [];
+
+    async function loadDishSuggestions(keyword) {
+      const q = String(keyword || "").trim();
+      if (!q) return;
+      const resp = await fetch(`/api/bom/dishes/search?q=${encodeURIComponent(q)}&limit=8`);
+      const data = await resp.json();
+      if (!resp.ok) return;
+      const options = (data.items || []).map((name) => `<option value="${escapeHtml(name)}"></option>`).join("");
+      salesDishSuggestionsEl.innerHTML = options;
+    }
+
+    salesManualDishNameEl.addEventListener("input", async (e) => {
+      await loadDishSuggestions(e.target.value || "");
+    });
+
+    salesManualAddBtn.addEventListener("click", () => {
+      const name = (salesManualDishNameEl.value || "").trim();
+      const qty = Number(salesManualQtyEl.value || "1");
+      const unitPriceRaw = salesManualUnitPriceEl.value;
+      const unitPrice = unitPriceRaw === "" ? null : Number(unitPriceRaw);
+      if (!name) {
+        salesSaveResultEl.textContent = "请先输入菜名。";
+        return;
+      }
+      if (!Number.isFinite(qty) || qty <= 0) {
+        salesSaveResultEl.textContent = "手动录入数量必须大于0。";
+        return;
+      }
+      const amount = unitPrice == null || !Number.isFinite(unitPrice) ? null : unitPrice * qty;
+      salesTable.appendRows([
+        {
+          item_name: name,
+          quantity: qty,
+          unit_price: unitPrice,
+          amount,
+          order_created_at: new Date().toISOString(),
+          remarks: "手动补录",
+        },
+      ]);
+      salesSaveBtn.style.display = "inline";
+      salesSaveResultEl.textContent = `已补录菜品：${name}`;
+      salesManualDishNameEl.value = "";
+      salesManualUnitPriceEl.value = "";
+      salesManualQtyEl.value = "1";
+    });
+
+    salesParseBtn.addEventListener("click", async () => {
+      salesErrorsEl.textContent = "";
+      salesSaveResultEl.textContent = "";
+      salesStatusEl.textContent = "";
+      salesSaveBtn.style.display = "none";
+      salesTable.clear();
+      const files = salesFilesEl.files;
+      if (!files || !files.length) {
+        salesStatusEl.textContent = "请先选择图片。";
+        return;
+      }
+      const formData = new FormData();
+      Array.from(files).forEach((file) => formData.append("files", file));
+      formData.append("biz_date", salesDateEl.value || "");
+      formData.append("auto_save", salesAutoSaveToggleEl.checked ? "true" : "false");
+      salesStatusEl.textContent = "识别中，请稍候...";
+      try {
+        const resp = await fetch("/api/sales/parse-images", { method: "POST", body: formData });
+        const data = await resp.json();
+        if (!resp.ok) {
+          const detail = data.detail ? JSON.stringify(data.detail) : "识别失败";
+          throw new Error(detail);
+        }
+        salesLastBizDate = data.biz_date || (salesDateEl.value || "");
+        salesLastImagePaths = data.source_image_paths || [];
+        salesTable.setData({ rows: data.preview || [], columns: data.preview_columns || null });
+        salesStatusEl.textContent = `识别完成：${(data.preview || []).length} 条。`;
+        if (data.auto_saved) {
+          const s = data.save_summary || {};
+          const ex = data.exception_details || [];
+          salesSaveResultEl.textContent = `自动入库完成：新增 ${s.inserted || 0}，跳过 ${s.skipped || 0}，累加 ${s.accumulated || 0}；异常 ${ex.length} 条。`;
+        } else {
+          salesSaveBtn.style.display = (data.preview || []).length ? "inline" : "none";
+          salesSaveResultEl.textContent = "请核对后点击“确认录入库存”。";
+        }
+        salesDownloadEl.style.display = (data.preview || []).length ? "inline" : "none";
+      } catch (err) {
+        salesStatusEl.textContent = "处理失败。";
+        salesErrorsEl.textContent = String(err);
+      }
+    });
+
+    salesSaveBtn.addEventListener("click", async () => {
+      salesErrorsEl.textContent = "";
+      const selected = salesTable.getSelectedRows();
+      if (!selected.length) {
+        salesSaveResultEl.textContent = "请先勾选要录入的条目。";
+        return;
+      }
+      const ok = window.confirm(`确认录入库存吗？共 ${selected.length} 条营业菜品。`);
+      if (!ok) return;
+      salesSaveResultEl.textContent = "录入中...";
+      try {
+        const resp = await fetch("/api/sales/confirm-save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            biz_date: salesLastBizDate || (salesDateEl.value || ""),
+            source_image_paths: salesLastImagePaths,
+            items: selected,
+            confirmed: true,
+          }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          const detail = data.detail ? JSON.stringify(data.detail) : "保存失败";
+          throw new Error(detail);
+        }
+        const ex = data.exception_details || [];
+        salesSaveResultEl.textContent = `录入完成：新增 ${data.inserted || 0}，跳过 ${data.skipped || 0}，累加 ${data.accumulated || 0}；异常 ${ex.length} 条。`;
+      } catch (err) {
+        salesSaveResultEl.textContent = "录入失败。";
+        salesErrorsEl.textContent = String(err);
+      }
+    });
+
+    document.getElementById("purchaseStatus").textContent = "提示：识别可所有客户端使用，保存入库受服务端写权限控制。";
+    document.getElementById("salesStatus").textContent = "提示：识别可所有客户端使用，保存入库受服务端写权限控制。";
+
+    const reportStatusEl = document.getElementById("reportStatus");
+    const reportSummaryEl = document.getElementById("reportSummary");
+    const reportMethodNoteEl = document.getElementById("reportMethodNote");
+    const reportTablesEl = document.getElementById("reportTables");
+    const reportDownloadEl = document.getElementById("reportDownload");
+    function isQuantityLikeField(fieldName) {
+      const key = String(fieldName || "");
+      return ["数量", "用量", "份数", "应耗", "实扣", "缺口", "库存"].some((kw) => key.includes(kw));
+    }
+    function formatReportCell(fieldName, value) {
+      const raw = value == null ? "" : String(value).trim();
+      if (!raw) return "";
+      // 数量类字段：0 或 0.00(含单位) 显示为“无”，且不显示单位
+      if (isQuantityLikeField(fieldName) && /^0+(?:\.0+)?(?:[^\d].*)?$/.test(raw)) {
+        return "无";
+      }
+      // 常见小数去尾零（如 12.000 -> 12, 3.1400 -> 3.14）
+      const pureNum = raw.match(/^-?\d+(?:\.\d+)?$/);
+      if (pureNum) {
+        return raw.replace(/(\.\d*?[1-9])0+$/, "$1").replace(/\.0+$/, "");
+      }
+      return raw;
+    }
+    function renderSimpleTable(title, rows) {
+      if (!rows || !rows.length) return `<h4>${title}</h4><p class="muted">暂无数据（当天暂无相关录入或扣减）</p>`;
+      const headers = Object.keys(rows[0]);
+      const th = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("");
+      const tr = rows
+        .map((r) => `<tr>${headers.map((h) => `<td>${escapeHtml(formatReportCell(h, r[h]))}</td>`).join("")}</tr>`)
+        .join("");
+      return `<h4>${title}</h4><div style="overflow-x:auto;"><table><tr>${th}</tr>${tr}</table></div>`;
+    }
+    document.getElementById("reportLoadBtn").addEventListener("click", async () => {
+      reportStatusEl.textContent = "加载中...";
+      reportSummaryEl.innerHTML = "";
+      reportMethodNoteEl.innerHTML = "";
+      reportMethodNoteEl.style.display = "none";
+      reportTablesEl.innerHTML = "";
+      reportDownloadEl.style.display = "none";
+      try {
+        const d = document.getElementById("reportDate").value || "";
+        const resp = await fetch(`/api/reports/daily?biz_date=${encodeURIComponent(d)}`);
+        const data = await resp.json();
+        if (!resp.ok) {
+          const detail = data.detail ? JSON.stringify(data.detail) : "加载失败";
+          throw new Error(detail);
+        }
+        reportStatusEl.textContent = "加载完成。";
+        const 营业收入 = data["营业收入"] ?? 0;
+        const 采购总额 = data["采购总额"] ?? 0;
+        const 即时消耗成本估算 = data["即时消耗成本估算"] ?? 0;
+        const 非即时耗材费用 = data["非即时耗材费用"] ?? 0;
+        const 毛利估算 = data["毛利估算"] ?? 0;
+        reportSummaryEl.innerHTML = `
+          <table>
+            <tr><th>营业日期</th><td>${escapeHtml(data.biz_date)}</td><th>营业收入</th><td>${escapeHtml(营业收入)}</td></tr>
+            <tr><th>采购总额</th><td>${escapeHtml(采购总额)}</td><th>即时消耗成本估算</th><td>${escapeHtml(即时消耗成本估算)}</td></tr>
+            <tr><th>非即时耗材费用</th><td>${escapeHtml(非即时耗材费用)}</td><th>毛利估算</th><td>${escapeHtml(毛利估算)}</td></tr>
+          </table>
+        `;
+        reportMethodNoteEl.innerHTML = `
+          <strong>口径说明</strong><br/>
+          1) 毛利估算 = 营业收入 - 即时消耗成本估算 - 非即时耗材费用。<br/>
+          2) 即时消耗成本估算：按当日扣减日志中的实扣数量 × 当前库存物料单价估算，属于业务估算口径。<br/>
+          3) 非即时耗材费用：按当日入库中“非即时消耗”金额汇总（如包装、清洁耗材等）。<br/>
+          4) 缺料预警与异常明细会影响成本与毛利解释，建议结合“缺料预警/异常明细”表一起查看。<br/>
+          5) 若某些物料缺失单价或单位不一致，成本估算可能偏低/偏高，建议及时校正采购单价与单位。
+        `;
+        reportMethodNoteEl.style.display = "block";
+        reportTablesEl.innerHTML =
+          renderSimpleTable("菜品销售情况", data.dish_sales || []) +
+          renderSimpleTable("当天用料消耗", data.ingredient_consumption || []) +
+          renderSimpleTable("库存剩余", data.inventory_remaining || []) +
+          renderSimpleTable("制作菜品消耗库存情况", data.dish_inventory_consumption || []) +
+          renderSimpleTable("缺料预警", data.shortage_alerts || []) +
+          renderSimpleTable("异常明细", data.exception_details || []);
+        reportDownloadEl.href = `/api/reports/daily/download?biz_date=${encodeURIComponent(d)}`;
+        reportDownloadEl.style.display = "inline";
+      } catch (err) {
+        reportStatusEl.textContent = "加载失败。";
+        reportSummaryEl.textContent = String(err);
+      }
+    });
+
+    const inventoryStatusEl = document.getElementById("inventoryStatus");
+    const inventoryTableEl = document.getElementById("inventoryTable");
+    const inventoryKeywordEl = document.getElementById("inventoryKeyword");
+    let inventorySourceRows = [];
+    let currentInventoryRows = [];
+    let inventorySortState = { key: "updated_at", direction: "desc" };
+    let inventoryTypeFilter = "all";
+
+    function toComparable(v) {
+      if (v == null || v === "") return null;
+      const n = Number(v);
+      if (!Number.isNaN(n)) return n;
+      const t = Date.parse(v);
+      if (!Number.isNaN(t)) return t;
+      return String(v).toLowerCase();
+    }
+
+    function applyInventoryView() {
+      const keyword = (inventoryKeywordEl.value || "").trim();
+      const lowerKeyword = keyword.toLowerCase();
+      const keywordFiltered = lowerKeyword
+        ? inventorySourceRows.filter((row) => String(row.product_name || "").toLowerCase().includes(lowerKeyword))
+        : [...inventorySourceRows];
+      const filtered =
+        inventoryTypeFilter === "all"
+          ? keywordFiltered
+          : keywordFiltered.filter((row) => (row.consumption_type || "unknown") === inventoryTypeFilter);
+      const { key, direction } = inventorySortState;
+      filtered.sort((a, b) => {
+        const av = toComparable(a[key]);
+        const bv = toComparable(b[key]);
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        if (av > bv) return direction === "asc" ? 1 : -1;
+        if (av < bv) return direction === "asc" ? -1 : 1;
+        return 0;
+      });
+      currentInventoryRows = filtered;
+      renderInventoryTable(inventoryTableEl, currentInventoryRows, keyword, inventorySortState);
+      inventoryStatusEl.textContent = `加载完成，共 ${currentInventoryRows.length} 条（筛选：${consumptionTypeLabel(inventoryTypeFilter)}）。`;
+      bindInventoryActions();
+      inventoryTableEl.querySelectorAll("th.sortable").forEach((th) => {
+        th.addEventListener("click", () => {
+          const nextKey = th.getAttribute("data-sort-key");
+          if (!nextKey) return;
+          if (inventorySortState.key === nextKey) {
+            inventorySortState.direction = inventorySortState.direction === "asc" ? "desc" : "asc";
+          } else {
+            inventorySortState = { key: nextKey, direction: "asc" };
+          }
+          applyInventoryView();
+        });
+      });
+    }
+
+    async function loadInventory() {
+      inventoryStatusEl.textContent = "加载中...";
+      inventoryTableEl.innerHTML = "";
+      try {
+        // Plan A: treat purchase items as inventory view by default.
+        const resp = await fetch("/api/purchase/items?limit=1000&offset=0");
+        const data = await resp.json();
+        if (!resp.ok) {
+          const detail = data.detail ? JSON.stringify(data.detail) : "加载失败";
+          throw new Error(detail);
+        }
+        const rows = data.items || [];
+        inventorySourceRows = rows.map((r) => ({
+          id: r.id,
+          product_name: r.item_name ?? "",
+          consumption_type: r.consumption_type || "unknown",
+          consumption_type_label: r.consumption_type_label ?? "待分类",
+          low_stock_alert_enabled: Boolean(r.low_stock_alert_enabled),
+          low_stock_threshold: r.low_stock_threshold,
+          quantity: r.quantity,
+          unit_price: r.unit_price,
+          unit_amount: r.unit_amount,
+          quantity_unit: r.quantity_unit,
+          total_quantity: r.total_quantity,
+          amount: r.amount,
+          last_saved_date: r.last_saved_date,
+          updated_at: r.updated_at,
+        }));
+        applyInventoryView();
+      } catch (err) {
+        inventoryStatusEl.textContent = "加载失败。";
+        inventoryTableEl.innerHTML = `<tr><td class="error">${String(err)}</td></tr>`;
+        inventorySourceRows = [];
+        currentInventoryRows = [];
+      }
+    }
+
+    document.getElementById("inventoryLoadBtn").addEventListener("click", loadInventory);
+    document.getElementById("inventoryNotifyBtn").addEventListener("click", async () => {
+      inventoryStatusEl.textContent = "正在发送飞书预警...";
+      try {
+        const data = await fetchLowStockAlerts(true);
+        if (!data.count) {
+          inventoryStatusEl.textContent = "当前没有触发预警的物料。";
+          return;
+        }
+        const resultText = (data.notify_results || [])
+          .map((r) => `${r.channel || "unknown"}:${r.sent ? "已发送" : r.reason || "跳过"}`)
+          .join("；");
+        const sentCount = Number(data.notify_sent_count || 0);
+        if (sentCount > 0) {
+          inventoryStatusEl.textContent = `预警发送完成，共 ${data.count} 条；成功通道 ${sentCount} 个。${resultText ? " " + resultText : ""}`;
+        } else {
+          inventoryStatusEl.textContent = `未发送到任何通道（请先配置 webhook）。共 ${data.count} 条。${resultText ? " " + resultText : ""}`;
+        }
+      } catch (err) {
+        inventoryStatusEl.textContent = `发送失败：${String(err)}`;
+      }
+    });
+    document.getElementById("typeFilterAllBtn").addEventListener("click", () => {
+      inventoryTypeFilter = "all";
+      applyInventoryView();
+    });
+    document.getElementById("typeFilterInstantBtn").addEventListener("click", () => {
+      inventoryTypeFilter = "instant";
+      applyInventoryView();
+    });
+    document.getElementById("typeFilterNonInstantBtn").addEventListener("click", () => {
+      inventoryTypeFilter = "non_instant";
+      applyInventoryView();
+    });
+    document.getElementById("typeFilterUnknownBtn").addEventListener("click", () => {
+      inventoryTypeFilter = "unknown";
+      applyInventoryView();
+    });
+    inventoryKeywordEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        applyInventoryView();
+      }
+    });
+
+    document.getElementById("inventoryReclassifyBtn").addEventListener("click", async () => {
+      inventoryStatusEl.textContent = "正在重分类历史数据...";
+      try {
+        const resp = await fetch("/api/purchase/reclassify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ include_classified: false, limit: 5000 }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          const detail = data.detail ? JSON.stringify(data.detail) : "重分类失败";
+          throw new Error(detail);
+        }
+        inventoryStatusEl.textContent = data.message || "重分类完成。";
+        await loadInventory();
+      } catch (err) {
+        inventoryStatusEl.textContent = `重分类失败：${String(err)}`;
+      }
+    });
+
+    document.getElementById("inventoryExportBtn").addEventListener("click", () => {
+      if (!currentInventoryRows.length) {
+        inventoryStatusEl.textContent = "当前没有可导出的库存数据。";
+        return;
+      }
+      const csv = toCsv(currentInventoryRows);
+      const ts = new Date().toISOString().replace(/[:.]/g, "-");
+      downloadTextFile(`inventory_${ts}.csv`, csv, "text/csv;charset=utf-8");
+      inventoryStatusEl.textContent = `已导出 ${currentInventoryRows.length} 条库存数据。`;
+    });
+
+    document.getElementById("inventoryAlertCloseBtn").addEventListener("click", () => {
+      const modal = document.getElementById("inventoryAlertModal");
+      if (modal) modal.style.display = "none";
+    });
+
+    window.addEventListener("load", async () => {
+      try {
+        const data = await fetchLowStockAlerts(false);
+        if (data.popup_enabled && data.count > 0) {
+          showInventoryAlertModal(data.items || []);
+        }
+      } catch (err) {
+        console.error("load inventory alert failed", err);
+      }
+    });
+  </script>
+</body>
+</html>

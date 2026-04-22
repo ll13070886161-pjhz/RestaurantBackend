@@ -1,0 +1,22 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.DS_Store
+
+# Runtime artifacts
+temp_uploads/
+outputs/
+*.log
+
+# Local databases / exports
+app.db
+*.sqlite
+*.sqlite3
+*.csv
+
+# IDE
+.idea/
+.vscode/
