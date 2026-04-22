@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: image2excel
+    env: python
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /health
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.18
+      - key: APP_HOST
+        value: 0.0.0.0
+      - key: APP_PORT
+        value: "8000"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: LLM_PROVIDER_NAME
+        value: volcengine
+      - key: LLM_BASE_URL
+        value: https://ark.cn-beijing.volces.com/api/v3/chat/completions
+      - key: LLM_TIMEOUT
+        value: "240"
+      - key: UPLOAD_DIR
+        value: temp_uploads
+      - key: OUTPUT_DIR
+        value: outputs
+      - key: WRITE_ALLOWED_IPS
+        value: 127.0.0.1,::1,localhost
+      - key: INVENTORY_ALERT_POPUP_ENABLED
+        value: "true"
+      - key: INVENTORY_ALERT_OPENCLAW_ENABLED
+        value: "false"

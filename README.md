@@ -108,6 +108,37 @@ SRC_DB_URL=sqlite:///./app.db make migrate-mysql
 3. 等待识别完成并预览结果
 4. 点击“下载最新Excel”
 
+## Render 部署（GitHub 自动部署）
+
+仓库已包含 `render.yaml`，Render 可直接识别构建与启动命令。
+
+### 1) 在 Render 创建服务
+
+1. 登录 Render，点击 `New +` -> `Blueprint`。
+2. 选择你的 GitHub 仓库（当前项目根目录含 `render.yaml`）。
+3. 确认服务名与区域后创建。
+
+### 2) 在 Render 控制台补充环境变量（必填）
+
+- `LLM_API_KEY`：你的模型服务密钥
+- `LLM_MODEL_NAME`：你的模型名或 endpoint id
+- 数据库二选一：
+  - 推荐：`DB_URL=mysql+pymysql://user:pass@host:3306/db?charset=utf8mb4`
+  - 或分段配置：`DB_TYPE/DB_HOST/DB_PORT/DB_USER/DB_PASS/DB_NAME/DB_PARAMS`
+
+注意：
+- 未配置外部数据库时会退回 `sqlite:///./app.db`。Render 免费实例为临时文件系统，重启会丢数据，不建议生产使用 SQLite。
+- `WRITE_ALLOWED_IPS` 默认仅本机。部署到云端后，管理端若需写入，可改为 `*` 或你的出口 IP（更安全建议固定 IP 白名单）。
+
+### 3) 部署后验证
+
+在 Render 日志看到 `Application startup complete` 后访问：
+
+- `https://<your-service>.onrender.com/health`
+- `https://<your-service>.onrender.com/`
+
+若 `/health` 返回 `{"status":"ok" ...}` 即服务上线成功。
+
 ## 访问与权限
 
 - 查看类接口（如库存、采购明细、营业明细）可远程访问。
